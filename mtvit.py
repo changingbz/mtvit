@@ -22,10 +22,6 @@ for some einops/einsum fun
 
 Hacked together by / Copyright 2021 Ross Wightman
 
-# ------------------------------------------
-# Modification:
-# Added code for MTViT training -- Copyright 2022 Youwei Liang
-
 """
 import math
 import logging
@@ -300,8 +296,7 @@ class Block(nn.Module):
         self.mlp_hidden_dim = mlp_hidden_dim
         self.dim = dim
         self.muti = muti_scale
-        if depth == 2 and muti_scale:
-            self.up = UpSample(dim)
+
     def forward(self, x, keep_rate=None, tokens=None, get_idx=False, xl=None):
         if keep_rate is None:
             keep_rate = self.keep_rate  # this is for inference, use the default keep rate
@@ -343,18 +338,11 @@ class Block(nn.Module):
                 xl = xl + self.drop_path(self.attn(self.norm1(xl))[0])
                 xl = xl + self.drop_path(self.mlp(self.norm2(xl)))
                 return x, n_tokens, None, None, None, xl
-            if self.depth == 1 :
+            if self.depth == 1 or self.depth == 2:
                 xq = downsample(xl, self.dim)
                 xq = self.drop_path(self.attn(self.norm1(xq))[0])
                 xl = xl + upsample(xq, 7)
                 xl = xl + self.drop_path(self.mlp(self.norm2(xl)))
-                return x, n_tokens, None, None, None, xl
-            if self.depth == 2:
-                xq = downsample(xl, self.dim)
-                xq = self.drop_path(self.attn(self.norm1(xq))[0])
-                xl = xl + upsample(xq, 7)
-                xl = xl + self.drop_path(self.mlp(self.norm2(xl)))
-                x = self.up(xl, x)
                 return x, n_tokens, None, None, None, xl
         if get_idx and index is not None:
             return x, n_tokens, idx, nidx, cos, None
@@ -411,6 +399,7 @@ class MTViT(nn.Module):
           self.pos_embed_list = [nn.Parameter(torch.zeros(1, num_patches + 1, embed_dim)) for num_patches in
                                num_patches_list]
           self.pos_embed_list = nn.ParameterList(self.pos_embed_list)
+          self.up = UpSample(dim=embed_dim)
         else:
             self.patch_embed = PatchEmbed(
                 img_size=img_size, patch_size=patch_size, in_chans=in_chans, embed_dim=embed_dim)
@@ -540,6 +529,9 @@ class MTViT(nn.Module):
         for i, blk in enumerate(self.blocks):
             if self.muti_scale:
                 xr, left_token, idx, nidx, cos, x = blk(xr, keep_rate[i], tokens[i], get_idx, x)
+                if i == 2:
+                    xr = self.up(x, xr)
+                    x = None
             else:
                 x, left_token, idx, nidx, cos, _ = blk(x, keep_rate[i], tokens[i], get_idx, None)
             left_tokens.append(left_token)

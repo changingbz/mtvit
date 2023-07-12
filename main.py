@@ -29,6 +29,7 @@ from samplers import RASampler
 import models
 import utils
 from helpers import speed_test
+
 from fvcore.nn import FlopCountAnalysis
 
 from tensorboardX import SummaryWriter
@@ -97,7 +98,7 @@ def get_args_parser():
                         help='warmup learning rate (default: 1e-6)')
     parser.add_argument('--min-lr', type=float, default=1e-5, metavar='LR',
                         help='lower lr bound for cyclic schedulers that hit 0 (1e-5)')
-    parser.add_argument('--muti-scale', action='store_true', help='Muti-Scale features')
+
     parser.add_argument('--decay-epochs', type=float, default=30, metavar='N',
                         help='epoch interval to decay LR')
     parser.add_argument('--warmup-epochs', type=int, default=5, metavar='N',
@@ -177,6 +178,9 @@ def get_args_parser():
     parser.add_argument('--start_epoch', default=0, type=int, metavar='N',
                         help='start epoch')
     parser.add_argument('--eval', action='store_true', help='Perform evaluation only')
+    parser.add_argument('--flops', action='store_true', help='Perform evaluation only')
+    parser.add_argument('--muti_scale', action='store_true', help='Perform evaluation only')
+
     parser.add_argument('--visualize_mask', action='store_true', help='Visualize the dropped image patches and then exit')
     parser.add_argument('--n_visualization', default=128, type=int)
     parser.add_argument('--dist-eval', action='store_true', default=False, help='Enabling distributed evaluation')
@@ -278,6 +282,10 @@ def main(args):
         muti_scale = args.muti_scale,
         img_size=(args.input_size, args.input_size)
     )
+    if args.flops:
+       test = torch.randn(args.batch_size, 3, 224, 224).cuda()
+       flops = FlopCountAnalysis(model.cuda(), test)
+       print("FLOPs: ", flops.total()/args.batch_size)
 
     if args.finetune:
         if args.finetune.startswith('https'):
@@ -292,18 +300,11 @@ def main(args):
             if k in checkpoint_model and checkpoint_model[k].shape != state_dict[k].shape:
                 print(f"Removing key {k} from pretrained checkpoint")
                 del checkpoint_model[k]
-
         # interpolate position embedding
-        if args.muti_scale:
-            pos_embed_checkpoint = checkpoint_model['pos_embed_list.1']
-            embedding_size = pos_embed_checkpoint.shape[-1]
-            num_patches = model.patch_embed.num_patches
-            num_extra_tokens = model.pos_embed_list[1].shape[-2] - num_patches
-        else:
-            pos_embed_checkpoint = checkpoint_model['pos_embed']
-            embedding_size = pos_embed_checkpoint.shape[-1]
-            num_patches = model.patch_embed.num_patches
-            num_extra_tokens = model.pos_embed.shape[-2] - num_patches
+        pos_embed_checkpoint = checkpoint_model['pos_embed_list.1']
+        embedding_size = pos_embed_checkpoint.shape[-1]
+        num_patches = model.patch_embed.num_patches
+        num_extra_tokens = model.pos_embed_list[1].shape[-2] - num_patches
         # height (== width) for the checkpoint position embedding
         orig_size = int((pos_embed_checkpoint.shape[-2] - num_extra_tokens) ** 0.5)
         # height (== width) for the new position embedding
@@ -342,7 +343,7 @@ def main(args):
             if args.output_dir and utils.is_main_process():
                 with (output_dir / "speed_macs.txt").open("a") as f:
                     f.write(log)
-        log_func1(inference_speed=inference_speed, GMACs=MACs * 1e-9)
+        log_func1(inference_speed=inference_speed)
         log_func1(args=args)
     if args.only_test_speed:
         return

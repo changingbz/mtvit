@@ -4,7 +4,6 @@ import torch
 from torchprofile import profile_macs
 import torch.nn.functional as F
 
-
 def adjust_keep_rate(iters, epoch, warmup_epochs, total_epochs,
                        ITERS_PER_EPOCH, base_keep_rate=0.5, max_keep_rate=1):
     if epoch < warmup_epochs:
@@ -64,6 +63,7 @@ def complement_idx(idx, dim):
     compl = compl[n_idx:].permute(*(tuple(range(1, ndim)) + (0,)))
     return compl
 
+
 def upsample(x, size=7):
     feature_temp = x[:, 1:]
     B, new_HW, C = feature_temp.shape
@@ -85,3 +85,4 @@ def downsample(x, dim):
     feature_temp = torch.cat([x[:, 0:1], feature_temp], dim=1)
 
     return feature_temp
+

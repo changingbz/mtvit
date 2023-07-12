@@ -44,7 +44,7 @@ class get_local(object):
 get_local.activate()
 import torch
 import torchvision.transforms as T
-from mvit import deit_small_patch16_shrink_base
+from mtvit import deit_small_patch16_shrink_base
 from PIL import Image, ImageDraw
 import numpy as np
 import matplotlib.pyplot as plt

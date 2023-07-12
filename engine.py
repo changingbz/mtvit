@@ -1,17 +1,13 @@
 # Copyright (c) 2015-present, Facebook, Inc.
 # All rights reserved.
-# ------------------------------------------
-# Modification:
-# Added code for adjusting keep rate and visualization -- Youwei Liang
+
 """
 Train and eval functions used in main.py
 """
 import math
-import random
 import sys
 from typing import Iterable, Optional
 
-import numpy as np
 import torch
 
 from timm.data import Mixup
@@ -23,24 +19,7 @@ import utils
 from helpers import adjust_keep_rate
 from visualize_mask import get_real_idx, mask, save_img_batch, make_visualization, getCluster
 from timm.data.constants import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-import kornia as k
-import torch.nn as nn
-from timm.data.random_erasing import RandomErasing
-
-class Transforms(nn.Module):
-    def __init__(self):
-        super(Transforms, self).__init__()
-        self.aug_list = k.augmentation.container.ImageSequential(
-            k.augmentation.ColorJitter(p=0.3),
-            # k.geometry.transform.rescale(interpolation='bicubic'),
-            k.augmentation.RandomErasing(p=0.25)
-        )
-
-    def forward(self, img):
-
-        img = self.aug_list(img)
-
-        return img
+import torch.nn.functional as F
 
 def train_one_epoch(model: torch.nn.Module, criterion: DistillationLoss,
                     data_loader: Iterable, optimizer: torch.optim.Optimizer,
@@ -57,8 +36,9 @@ def train_one_epoch(model: torch.nn.Module, criterion: DistillationLoss,
     log_interval = 100
     it = epoch * len(data_loader)
     ITERS_PER_EPOCH = len(data_loader)
-    idx = 0
+
     base_rate = args.base_keep_rate
+
     for samples, targets in metric_logger.log_every(data_loader, print_freq, header):
         samples = samples.to(device, non_blocking=True)
         targets = targets.to(device, non_blocking=True)
@@ -69,30 +49,38 @@ def train_one_epoch(model: torch.nn.Module, criterion: DistillationLoss,
 
         if mixup_fn is not None:
             samples, targets = mixup_fn(samples, targets)
+       # resized_img = F.interpolate(samples, (112, 112), mode='bilinear', align_corners=True)
+       # samples = torch.squeeze(resized_img)
         with torch.cuda.amp.autocast():
             outputs = model(samples, keep_rate)
             loss = criterion(samples, outputs, targets)
+
         loss_value = loss.item()
 
         if not math.isfinite(loss_value):
             print("Loss is {}, stopping training".format(loss_value))
             sys.exit(1)
+
+        optimizer.zero_grad()
+
         # this attribute is added by timm on one optimizer (adahessian)
         is_second_order = hasattr(optimizer, 'is_second_order') and optimizer.is_second_order
         loss_scaler(loss, optimizer, clip_grad=max_norm,
                     parameters=model.parameters(), create_graph=is_second_order)
+
         torch.cuda.synchronize()
         if model_ema is not None:
             model_ema.update(model)
+
         metric_logger.update(loss=loss_value)
         metric_logger.update(lr=optimizer.param_groups[0]["lr"])
-        
+
         if torch.distributed.get_rank() == 0 and it % log_interval == 0:
+       # if it % log_interval == 0:
             writer.add_scalar('loss', loss_value, it)
             writer.add_scalar('lr', optimizer.param_groups[0]["lr"], it)
             writer.add_scalar('keep_rate', keep_rate, it)
         it += 1
-        idx += 1
 
     # gather the stats from all processes
     metric_logger.synchronize_between_processes()
@@ -193,6 +181,7 @@ def visualize_mask(data_loader, model, device, output_dir, n_visualization, keep
             loss = criterion(output, target)
 
         acc1, acc5 = accuracy(output, target, topk=(1, 5))
+
         images = images * std + mean
         idxs = get_real_idx(idx)
         alls = getCluster(idxs, nidxs, coss)
@@ -214,5 +203,3 @@ def visualize_mask(data_loader, model, device, output_dir, n_visualization, keep
           .format(top1=metric_logger.acc1, top5=metric_logger.acc5, losses=metric_logger.loss))
 
     return {k: meter.global_avg for k, meter in metric_logger.meters.items()}
-
-

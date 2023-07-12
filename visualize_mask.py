@@ -66,7 +66,8 @@ def getCluster(idx, nidx, cos):
     nidxi = 0
     for i in range(len(idx)):
       output = torch.zeros(idx[0].size(0), 196, dtype=int, device='cuda')
-      if i == 0 :
+
+      if i == 0:
           output = torch.scatter(output, dim=1, index=idx[i], src=idx[i])
           cosi = torch.gather(idx[i], dim=1, index=cos[i])
           output = torch.scatter(output, dim=1, index=nidx[i], src=cosi)
@@ -150,5 +151,3 @@ def get_real_idx(idxs):
 def save_img_batch(x, path, file_name='img{}', start_idx=0):
     for i, img in enumerate(x):
         save_image(img, os.path.join(path, file_name.format(start_idx + i)))
-
-
