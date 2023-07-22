@@ -38,18 +38,18 @@ Download and extract ImageNet train and val images from http://image-net.org/. T
 
 To train MTViT  on ImageNet on a single node with 8 gpus for 300 epochs,  run:
 
-Set `--base_keep_rate`  to use a different keep rate, and set `--muti-scale` to configure whether to use multi-scale features.
+Set `--base_keep_rate`  to use a different keep rate, and set `--multi-scale` to configure whether to use multi-scale features.
 
 MTViT-T
 
 ```
-python3  -m torch.distributed.launch --nproc_per_node=8 --use_env main.py --model deit_tiny_patch16_shrink_base  --base_keep_rate 0.7 --input-size 224 --batch-size 256 --warmup-epochs 5 --shrink_start_epoch 10 --shrink_epochs 100 --epochs 300 --dist-eval  --data-path /path/to/imagenet --output_dir /out/to/dir --muti-scale
+python3  -m torch.distributed.launch --nproc_per_node=8 --use_env main.py --model deit_tiny_patch16_shrink_base  --base_keep_rate 0.7 --input-size 224 --batch-size 256 --warmup-epochs 5 --shrink_start_epoch 10 --shrink_epochs 100 --epochs 300 --dist-eval  --data-path /path/to/imagenet --output_dir /out/to/dir --multi-scale
 ```
 
 MTViT-S
 
 ```
-python3  -m torch.distributed.launch --nproc_per_node=8 --use_env main.py --model deit_small_patch16_shrink_base  --base_keep_rate 0.7 --input-size 224 --batch-size 128 --warmup-epochs 5 --shrink_start_epoch 10 --shrink_epochs 100 --epochs 300 --dist-eval  --data-path /path/to/imagenet --output_dir /out/to/dir --muti-scale
+python3  -m torch.distributed.launch --nproc_per_node=8 --use_env main.py --model deit_small_patch16_shrink_base  --base_keep_rate 0.7 --input-size 224 --batch-size 128 --warmup-epochs 5 --shrink_start_epoch 10 --shrink_epochs 100 --epochs 300 --dist-eval  --data-path /path/to/imagenet --output_dir /out/to/dir --multi-scale
 ```
 
 MTViT-B(The features obtained before token pruning are already sufficiently rich, so multi-scale features are not used.)
