@@ -179,7 +179,7 @@ def get_args_parser():
                         help='start epoch')
     parser.add_argument('--eval', action='store_true', help='Perform evaluation only')
     parser.add_argument('--flops', action='store_true', help='Perform evaluation only')
-    parser.add_argument('--muti_scale', action='store_true', help='Perform evaluation only')
+    parser.add_argument('--multi_scale', action='store_true', help='Perform evaluation only')
 
     parser.add_argument('--visualize_mask', action='store_true', help='Visualize the dropped image patches and then exit')
     parser.add_argument('--n_visualization', default=128, type=int)
@@ -279,7 +279,7 @@ def main(args):
         drop_rate=args.drop,
         drop_path_rate=args.drop_path,
         drop_block_rate=None,
-        muti_scale = args.muti_scale,
+        multi_scale = args.multi_scale,
         img_size=(args.input_size, args.input_size)
     )
     if args.flops:

@@ -281,7 +281,7 @@ class Block(nn.Module):
 
     def __init__(self, dim, num_heads, mlp_ratio=4., qkv_bias=False, drop=0., attn_drop=0.,
                  drop_path=0., act_layer=nn.GELU, norm_layer=nn.LayerNorm, keep_rate=0.,
-                 depth=0, muti_scale=False):
+                 depth=0, multi_scale=False):
         super().__init__()
         self.norm1 = norm_layer(dim)
         self.depth = depth
@@ -295,7 +295,7 @@ class Block(nn.Module):
         self.keep_rate = keep_rate
         self.mlp_hidden_dim = mlp_hidden_dim
         self.dim = dim
-        self.muti = muti_scale
+        self.multi = multi_scale
 
     def forward(self, x, keep_rate=None, tokens=None, get_idx=False, xl=None):
         if keep_rate is None:
@@ -333,7 +333,7 @@ class Block(nn.Module):
             cos = node_idx.squeeze(-1)
         x = x + self.drop_path(self.mlp(self.norm2(x)))
         n_tokens = x.shape[1] - 1
-        if self.muti:
+        if self.multi:
             if self.depth == 0 :
                 xl = xl + self.drop_path(self.attn(self.norm1(xl))[0])
                 xl = xl + self.drop_path(self.mlp(self.norm2(xl)))
@@ -354,7 +354,7 @@ class MTViT(nn.Module):
     def __init__(self, img_size=224, patch_size=16, in_chans=3, num_classes=1000, embed_dim=768, depth=12,
                  num_heads=12, mlp_ratio=4., qkv_bias=True, representation_size=None, distilled=False,
                  drop_rate=0., attn_drop_rate=0., drop_path_rate=0., norm_layer=None,
-                 act_layer=None, weight_init='', keep_rate=(1, ), muti_scale=False):
+                 act_layer=None, weight_init='', keep_rate=(1, ), multi_scale=False):
         """
         Args:
             img_size (int, tuple): input image size
@@ -391,8 +391,8 @@ class MTViT(nn.Module):
         self.num_tokens = 2 if distilled else 1
         norm_layer = norm_layer or partial(nn.LayerNorm, eps=1e-6)
         act_layer = act_layer or nn.GELU
-        self.muti_scale = muti_scale
-        if muti_scale:
+        self.multi_scale = multi_scale
+        if multi_scale:
           self.patch_embed = MultiResoPatchEmbed(
             img_size_list=[112, 224], patch_size=patch_size, in_chans=in_chans, embed_dim=embed_dim)
           num_patches_list = self.patch_embed.num_patches_list
@@ -415,7 +415,7 @@ class MTViT(nn.Module):
             Block(
                 dim=embed_dim, num_heads=num_heads, mlp_ratio=mlp_ratio, qkv_bias=qkv_bias, drop=drop_rate,
                 attn_drop=attn_drop_rate, drop_path=dpr[i], norm_layer=norm_layer, act_layer=act_layer,
-                keep_rate=keep_rate[i], depth=i, muti_scale=muti_scale)
+                keep_rate=keep_rate[i], depth=i, multi_scale=multi_scale)
             for i in range(depth)])
         self.norm = norm_layer(embed_dim)
         # Representation layer
@@ -438,7 +438,7 @@ class MTViT(nn.Module):
     def init_weights(self, mode=''):
         assert mode in ('jax', 'jax_nlhb', 'nlhb', '')
         head_bias = -math.log(self.num_classes) if 'nlhb' in mode else 0.
-        if not self.muti_scale:
+        if not self.multi_scale:
             trunc_normal_(self.pos_embed, std=.02)
         else:
           for pos_embed in self.pos_embed_list:
@@ -489,7 +489,7 @@ class MTViT(nn.Module):
         assert len(keep_rate) == self.depth
         assert len(tokens) == self.depth
         xr = 0
-        if self.muti_scale:
+        if self.multi_scale:
             resized_img = F.interpolate(x, (112, 112), mode='bilinear', align_corners=True)
             xr = torch.squeeze(resized_img)
             xr = self.patch_embed(xr)
@@ -500,7 +500,7 @@ class MTViT(nn.Module):
         cls_token = self.cls_token.expand(x.shape[0], -1, -1)  # stole cls_tokens impl from Phil Wang, thanks
         if self.dist_token is None:
             x = torch.cat((cls_token, x), dim=1)
-            if self.muti_scale:
+            if self.multi_scale:
                 xr = torch.cat((cls_token, xr), dim=1)
         else:
             x = torch.cat((cls_token, self.dist_token.expand(x.shape[0], -1, -1), x), dim=1)
@@ -519,7 +519,7 @@ class MTViT(nn.Module):
             pos_embed = torch.cat([pos_embed[:, :self.num_tokens], new_pos], dim=1)
 
         x = self.pos_drop(x + pos_embed)
-        if self.muti_scale:
+        if self.multi_scale:
             xr = self.pos_drop(xr + self.pos_embed_list[0])
 
         left_tokens = []
@@ -527,7 +527,7 @@ class MTViT(nn.Module):
         nidxs = []
         coss = []
         for i, blk in enumerate(self.blocks):
-            if self.muti_scale:
+            if self.multi_scale:
                 xr, left_token, idx, nidx, cos, x = blk(xr, keep_rate[i], tokens[i], get_idx, x)
                 if i == 2:
                     xr = self.up(x, xr)
